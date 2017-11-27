@@ -1,0 +1,6 @@
+name "os_kadai"
+description "A minimal D application."
+authors "sobaya007"
+copyright "Copyright © 2017, sobaya007"
+license "proprietary"
+dependency "dfuse" version="~>0.3.0"

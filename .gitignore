@@ -1,0 +1,16 @@
+.dub
+docs.json
+__dummy.html
+docs/
+os_kadai.so
+os_kadai.dylib
+os_kadai.dll
+os_kadai.a
+os_kadai.lib
+os_kadai-test-*
+os_kadai
+.DS_Store
+*.exe
+*.o
+*.obj
+*.lst
