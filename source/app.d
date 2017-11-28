@@ -1,37 +1,42 @@
 import dfuse.fuse;
 
-import std.algorithm, std.conv, std.stdio, std.file, std.string, std.range, std.array, std.typecons;
+import std.algorithm, std.conv, std.stdio, std.file, std.string, std.range, std.array, std.typecons, std.datetime;
 
-/**
- * A simple directory listing using dfuse
- */
-class SimpleFS : Operations
+class MyFS : Operations
 {
+    private FileSystem fs;
+
+    this(FileSystem fs) {
+        this.fs = fs;
+    }
+
     override void getattr(const(char)[] path, ref stat_t s)
     {
-        if (path == "/")
-        {
+        auto file = fs.getFile(path.to!string);
+
+        if (auto dir = cast(Directory)file) {
             s.st_mode = S_IFDIR | octal!755;
-            s.st_size = 0;
+            s.st_size = dir.size;
+            s.st_nlink = dir.nlink;
+            s.st_mtime = Clock.currTime.toUnixTime;
+            return;
+        } else if (auto f = cast(FileContent)file) {
+            s.st_mode = S_IFREG | octal!777;
+            s.st_size = f.size;
+            s.st_nlink = f.nlink;
+            s.st_mtime = Clock.currTime.toUnixTime;
             return;
         }
-
-        if (path.among("/a", "/b"))
-        {
-            s.st_mode = S_IFREG | octal!644;
-            s.st_size = 42;
-            return;
-        }
-
 
         throw new FuseException(errno.ENOENT);
     }
 
     override string[] readdir(const(char)[] path)
     {
-        if (path == "/")
-        {
-            return ["a", "b"];
+        auto file = fs.getFile(path.to!string);
+        if (auto dir = cast(Directory)file) {
+            auto names = dir.entries.map!(entry => entry.name).array;
+            return names;
         }
 
         throw new FuseException(errno.ENOENT);
@@ -56,6 +61,8 @@ alias DirEntry = Tuple!(string, "name", ushort, "inum");
 
 class Directory : File {
      DirEntry[] entries;
+     short nlink;
+     uint size;
 }
 
 class FileSystem {
@@ -117,6 +124,7 @@ class FileSystem {
         auto data = &cur[0];
 
         // construct file info
+        this.files.length = superBlock.ninodes;
         foreach (i; 0..superBlock.ninodes) {
             auto inode = inodes[i];
 
@@ -158,7 +166,9 @@ class FileSystem {
                     dir.entries ~= DirEntry(name, entry.inum);
                 }
                 dir.entries = dir.entries.sort!((a,b) => a.name < b.name).array;
-                this.files ~= dir;
+                dir.size = cast(uint)(dir.entries.length * dirent.sizeof);
+                dir.nlink = cast(ushort)(dir.entries.length - 2 + 1);
+                this.files[i] = dir;
             } else if (inode.type == 2) {
                 auto file = new FileContent;
                 file.major = inode.major;
@@ -166,25 +176,48 @@ class FileSystem {
                 file.nlink = inode.nlink;
                 file.size = inode.size;
                 file.content = content;
-                this.files ~= files;
+                this.files[i] = file;
             } else {
                 assert(false);
             }
         }
 
         auto findResult = files.find!(file => cast(Directory)file);
-        assert(findResult.length > 0);
+        assert(!findResult.empty);
         this.root = cast(Directory)findResult[0];
         assert(this.root !is null);
         while (true) {
             auto findResult2 = this.root.entries.find!(entry => entry.name == "..");
-            assert(findResult2.length > 0);
+            assert(!findResult2.empty);
             auto parent = cast(Directory)files[findResult2[0].inum];
             assert(parent !is null);
             if (this.root is parent) break;
             this.root = parent;
         }
-        foreach (entry; this.root.entries) writeln(entry.name);
+    }
+
+    Directory getRoot() {
+        return this.root;
+    }
+
+    File[] getChildren(Directory dir) {
+        return dir.entries.map!(entry => files[entry.inum]).array;
+    }
+
+    File getFile(string path) in {
+        assert(path[0] == '/');
+    } body {
+        File cur = this.root;
+        assert(path.split("/").length < 5);
+        foreach (p; path.split("/")) {
+            if (p.empty) continue;
+            auto dir = cast(Directory)cur;
+            if (dir is null) return null;
+            auto findResult = dir.entries.find!(entry => entry.name == p);
+            if (findResult.empty) return null;
+            cur = this.files[findResult[0].inum];
+        }
+        return cur;
     }
 }
 
@@ -198,12 +231,8 @@ int main(string[] args)
 
     stdout.writeln("mounting simplefs");
 
-    auto fs = new FileSystem("fs.img");
-
-    /*
     auto fs = new Fuse("SimpleFS", true, false);
-    fs.mount(new SimpleFS(), args[1], []);
+    fs.mount(new MyFS(new FileSystem("fs.img")), args[1], []);
 
-    */
     return 0;
 }
