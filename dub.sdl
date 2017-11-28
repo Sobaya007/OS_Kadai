@@ -3,4 +3,8 @@ description "A minimal D application."
 authors "sobaya007"
 copyright "Copyright © 2017, sobaya007"
 license "proprietary"
-dependency "dfuse" version="~>0.3.0"
+
+importPaths "dfuse/source"
+
+dependency "os_kadai:dfuse" version="*"
+subPackage "./dfuse/"

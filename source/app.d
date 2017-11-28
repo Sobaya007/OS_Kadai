@@ -41,6 +41,29 @@ class MyFS : Operations
 
         throw new FuseException(errno.ENOENT);
     }
+
+    override ulong read(const(char)[] path, ubyte[] buf, ulong offset)
+    {
+        auto file = fs.getFile(path.to!string);
+        if (auto f = cast(FileContent)file) {
+            auto size = f.size - offset;
+            buf[0..size] = f.content[offset..offset+size];
+            return size;
+        }
+        throw new FuseException(errno.EOPNOTSUPP);
+    }
+
+    override int write(const(char)[] path, in ubyte[] data, ulong offset)
+    {
+        auto file = fs.getFile(path.to!string);
+        if (auto f = cast(FileContent)file) {
+            f.size = cast(ushort)(offset + data.length);
+            f.content.length = f.size;
+            f.content = f.content[0..offset] ~ data;
+            return cast(uint)data.length;
+        }
+        throw new FuseException(errno.EOPNOTSUPP);
+    }
 }
 
 enum NDIRECT = 12;
