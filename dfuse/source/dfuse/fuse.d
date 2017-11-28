@@ -11,13 +11,13 @@ module dfuse.fuse;
 
 /* reexport stat_t */
 public import core.sys.posix.fcntl;
+public import errno = core.stdc.errno;
 
 import std.algorithm;
 import std.array;
 import std.conv;
 import std.stdio;
 import std.string;
-import errno = core.stdc.errno;
 import core.stdc.string;
 
 import c.fuse.fuse;

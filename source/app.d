@@ -1,4 +1,4 @@
-import dfuse.fuse;
+import dfuse.fuse, c.fuse.common;
 
 import std.algorithm, std.conv, std.stdio, std.file, std.string, std.range, std.array, std.typecons, std.datetime;
 
@@ -55,6 +55,7 @@ class MyFS : Operations
 
     override int write(const(char)[] path, in ubyte[] data, ulong offset)
     {
+        writeln(path);
         auto file = fs.getFile(path.to!string);
         if (auto f = cast(FileContent)file) {
             f.size = cast(ushort)(offset + data.length);
@@ -63,6 +64,22 @@ class MyFS : Operations
             return cast(uint)data.length;
         }
         throw new FuseException(errno.EOPNOTSUPP);
+    }
+
+    override bool access(const(char)[] path, int mode)
+    {
+        return true;
+    }
+
+    override void truncate(const(char)[] path, ulong length)
+    {
+        auto file = fs.getFile(path.to!string);
+        if (file is null) throw new FuseException(errno.ENOENT);
+        if (auto f = cast(FileContent)file) {
+            f.size = cast(uint)length;
+            return;
+        }
+        throw new FuseException(errno.EOPNOTSUPP); 
     }
 }
 
